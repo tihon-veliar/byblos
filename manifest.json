@@ -2,8 +2,6 @@
   "id": "byblos",
   "name": "Byblos",
   "version": "0.0.1",
-  "minAppVersion": "1.5.0",
-  "description": "Epistemic Zettelkasten engine",
-  "author": "you",
+  "minAppVersion": "0.15.0",
   "main": "main.js"
 }

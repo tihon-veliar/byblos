@@ -9,6 +9,7 @@ export default class ByblosPlugin extends Plugin {
         await this.createZettel();
       },
     });
+    console.log("Byblos plugin loaded");
   }
 
   async createZettel() {
@@ -24,10 +25,7 @@ export default class ByblosPlugin extends Plugin {
 
   generateId(): string {
     const now = new Date();
-    return now
-      .toISOString()
-      .replace(/[-:]/g, "")
-      .slice(0, 15);
+    return now.toISOString().replace(/[-:]/g, "").slice(0, 15);
   }
 
   buildTemplate(id: string): string {
