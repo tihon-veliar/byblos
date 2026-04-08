@@ -3,27 +3,65 @@ interface Input {
 }
 
 interface Node {
-  id: string;        // генерирует система
+  id: string; // генерирует система
   title: string;
   content: string;
 }
 
+export type MatchType = "strong" | "related";
+
 interface Match {
-  id: string;        // id существующей ноды
+  id: string; // id существующей ноды
   title: string;
   score: number;
-  type: 'strong' | 'related';
+  type: MatchType;
 }
 
-interface Link {
-  source: string;    // id новой ноды
-  target: string;    // id новой или существующей ноды
-  type: 'extends' | 'refines' | 'contradicts';
+export type ContectItem = {
+  id: string;
+  title: string;
+};
+
+export type GenerationContext = {
+  primary?: ContectItem;
+  related: ContectItem[];
+};
+interface MatchGroups {
+  initial: Match[];
+  generated: Match[];
 }
+
+export type LinkType = "extends" | "refines" | "contradicts";
+interface Link {
+  source: string; 
+  target: string; 
+  type: LinkType;
+}
+
+type PipelineResultStatus = "seed" | "multi";
 
 interface PipelineResult {
-  nodes: Node[];     // [] если duplicate
-  matches: Match[];
-  links: Link[];     // internal + external
-  decision: 'duplicate' | 'seed' | 'linked' | 'decompose';
+  nodes: Node[]; // [] если duplicate
+  matches: MatchGroups;
+  links: Link[]; // internal + external
+  status: PipelineResultStatus;
 }
+
+type GenerationDraft = {
+  content: string;
+  retrievalQueries: string[];
+  retrievalSeed: string;
+};
+
+
+export {
+  Input,
+  Node,
+  Match,
+  Link,
+  PipelineResult,
+  MatchGroups,
+  PipelineResultStatus,
+  GenerationDraft,
+
+};
