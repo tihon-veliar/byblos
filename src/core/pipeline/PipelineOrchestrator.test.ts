@@ -90,12 +90,14 @@ describe("PipelineOrchestrator", () => {
         }),
       },
       GenerationModule: {
-        generate: vi.fn((input: { text: string; context: GenerationContext }) => {
-          steps.push("generate");
-          expect(input.text).toBe("normalized input");
-          expect(input.context).toBe(context1);
-          return draft;
-        }),
+        generate: vi.fn(
+          (input: { text: string; context: GenerationContext }) => {
+            steps.push("generate");
+            expect(input.text).toBe("normalized input");
+            expect(input.context).toBe(context1);
+            return draft;
+          },
+        ),
       },
       RefinementModule: {
         refine: vi.fn(
