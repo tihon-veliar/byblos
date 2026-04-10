@@ -4,79 +4,85 @@ import type {
 } from "../../core/pipeline/contracts";
 import type { PipelineModules } from "../../core/pipeline/pipeline-modules";
 
+import { buildPrompt } from "../../llm/prompts/build-prompt";
+import { GENERATION_PROMPT_PRESET } from "../../llm/prompts/presets/generation";
+import { generateRawText } from "../../llm/infra/gateway";
+
+import { parseLlmOutput } from "../../core/generation/parser/parse-llm-output";
+import { validateParsedLlmOutput } from "../../core/generation/validator/validate-parsed-llm-output";
+
+import {
+  llmCallFailed,
+  llmParseFailed,
+  llmValidationFailed,
+} from "../../core/errors/llm-errors";
 type GenerateInput = {
   text: string;
   context: GenerationContext;
 };
 
 export const GenerationModule: PipelineModules["GenerationModule"] = {
-  generate(input: GenerateInput): GenerationDraft {
-    const normalizedText = normalizeText(input.text);
-    const primaryTitle = normalizeText(input.context.primary?.title);
+  async generate(input: GenerateInput): Promise<GenerationDraft> {
+    const prompt = buildPrompt({
+      preset: GENERATION_PROMPT_PRESET,
+      context: input.context,
+      input: input.text,
+    });
+
+    let rawText: string | null = null;
+    try {
+      rawText = await generateRawText(prompt);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw llmCallFailed("generation", error);
+      } else {
+        throw llmCallFailed("generation", new Error("Unknown error"));
+      }
+    }
+
+    const parsedResult = parseLlmOutput(rawText);
+
+    if (!parsedResult.ok)
+      throw llmParseFailed("generation", parsedResult.error);
+
+    const validationResult = validateParsedLlmOutput(parsedResult.value, {
+      requiredMetaKeys: ["search_phrases"],
+    });
+
+    if (!validationResult.ok)
+      throw llmValidationFailed("generation", validationResult.error);
+
+    const { notes, meta } = parsedResult.value;
 
     return {
-      content: buildDraftContent(normalizedText, primaryTitle),
-      retrievalQueries: buildRetrievalQueries(normalizedText, primaryTitle),
-      retrievalSeed: buildRetrievalSeed(normalizedText, primaryTitle),
+      content: joinDraftNotes(notes),
+      retrievalQueries: readSearchPhrases(meta.search_phrases),
+      retrievalSeed: readRetrievalSeed(meta.retrieval_seed, notes),
     };
   },
 };
 
-function buildDraftContent(
-  text: string,
-  primaryTitle: string | undefined,
+function joinDraftNotes(notes: string[]): string {
+  return notes.join("\n\n").trim();
+}
+
+function readSearchPhrases(value: string | string[] | undefined): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      "GenerationModule: search_phrases must be a string array in META.",
+    );
+  }
+
+  return value.map((item) => item.trim()).filter((item) => item.length > 0);
+}
+
+function readRetrievalSeed(
+  value: string | string[] | undefined,
+  notes: string[],
 ): string {
-  const parts = [`Draft note: ${text}.`]; // TODO: Wrong format
-
-  if (primaryTitle) {
-    parts.push(`Context anchor: ${primaryTitle}.`);
-    parts.push(`Working direction: connect the input to ${primaryTitle}.`);
-  } else {
-    parts.push("Working direction: clarify the main idea before refinement.");
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
   }
 
-  return parts.join(" ");
-}
-
-function buildRetrievalQueries(
-  text: string,
-  primaryTitle: string | undefined,
-): string[] {
-  const queries = [text];
-
-  if (primaryTitle) {
-    queries.push(primaryTitle);
-  }
-
-  return dedupeQueries(queries).slice(0, 2);
-}
-
-function buildRetrievalSeed(
-  text: string,
-  primaryTitle: string | undefined,
-): string {
-  if (primaryTitle && primaryTitle.length <= text.length) {
-    return primaryTitle;
-  }
-
-  return text;
-}
-
-function dedupeQueries(values: string[]): string[] {
-  const seen = new Set<string>();
-
-  return values.filter((value) => {
-    const normalizedValue = value.toLowerCase();
-
-    if (seen.has(normalizedValue)) {
-      return false;
-    }
-
-    seen.add(normalizedValue);
-    return true;
-  });
-}
-
-function normalizeText(value: string | undefined): string {
-  return value?.replace(/\s+/g, " ").trim() ?? "";
+  return joinDraftNotes(notes);
 }

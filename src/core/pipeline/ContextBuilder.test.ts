@@ -13,8 +13,23 @@ describe("ContextBuilder", () => {
 
     const context = ContextBuilder.build(matches);
 
-    expect(context.primary).toEqual(matches[1]);
-    expect(context.related).toEqual([matches[0], matches[2]]);
+    expect(context.primary).toEqual({
+      id: matches[1].id,
+      title: matches[1].title,
+      content: expect.anything(),
+    });
+    expect(context.related).toEqual([
+      {
+        id: matches[0].id,
+        title: matches[0].title,
+        content: expect.anything(),
+      },
+      {
+        id: matches[2].id,
+        title: matches[2].title,
+        content: expect.anything(),
+      },
+    ]);
   });
 
   it("caps related matches at the current bound and excludes the primary match", () => {
@@ -29,10 +44,29 @@ describe("ContextBuilder", () => {
 
     const context = ContextBuilder.build(matches);
 
-    expect(context.primary).toEqual(matches[0]);
+    expect(context.primary).toMatchObject({
+      id: "m-1",
+      title: "Primary Match",
+    });
+
     expect(context.related).toHaveLength(4);
-    expect(context.related).toEqual(matches.slice(1, 5));
-    expect(context.related).not.toContain(matches[0]);
+
+    expect(context.related.map((item) => item.id)).toEqual([
+      "m-2",
+      "m-3",
+      "m-4",
+      "m-5",
+    ]);
+
+    expect(context.related.map((item) => item.title)).toEqual([
+      "Related One",
+      "Related Two",
+      "Related Three",
+      "Related Four",
+    ]);
+
+    expect(context.primary?.content).toEqual(expect.any(String));
+    expect(context.related[0]?.content).toEqual(expect.any(String));
   });
 
   it("returns a valid minimal context for empty matches", () => {

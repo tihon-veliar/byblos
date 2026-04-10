@@ -5,7 +5,24 @@ import type {
   Match,
   Node,
 } from "../../core/pipeline/contracts";
+
+import {
+  mapNodes,
+  extractLinksFromNodes,
+} from "../../core/generation/mapper/note-mapper";
 import type { PipelineModules } from "../../core/pipeline/pipeline-modules";
+
+import { buildPrompt } from "../../llm/prompts/build-prompt";
+import { REFINEMENT_PROMPT_PRESET } from "../../llm/prompts/presets/refinement";
+import { generateRawText } from "../../llm/infra/gateway";
+
+import { parseLlmOutput } from "../../core/generation/parser/parse-llm-output";
+import { validateParsedLlmOutput } from "../../core/generation/validator/validate-parsed-llm-output";
+import {
+  llmCallFailed,
+  llmParseFailed,
+  llmValidationFailed,
+} from "../../core/errors/llm-errors";
 
 type RefineInput = {
   draft: GenerationDraft;
@@ -13,32 +30,41 @@ type RefineInput = {
   matches: Match[];
 };
 
-type ParsedBlock = {
-  title: string;
-  content: string;
-  links: Array<{
-    type: Link["type"];
-    targetTitle: string;
-  }>;
-};
-
-const NOTE_SEPARATOR = "---NOTE---";
-
 export const RefinementModule: PipelineModules["RefinementModule"] = {
-  refine(input: RefineInput): {
+  async refine(input: RefineInput): Promise<{
     nodes: Node[];
     links: Link[];
     rawText: string;
-  } {
-    const rawText = buildStubResponse(input);
-    const blocks = parseBlocks(rawText);
-    const nodes = blocks.map((block, index) => ({
-      // Temporary technical id for the pipeline skeleton; Byblos linking is title-based.
-      id: buildNodeId(index),
-      title: block.title,
-      content: block.content,
-    }));
-    const links = extractLinks(blocks, nodes);
+  }> {
+    const prompt = buildPrompt({
+      preset: REFINEMENT_PROMPT_PRESET,
+      context: input.context,
+      input: input.draft.content,
+    });
+
+    let rawText: string | null = null;
+    try {
+      rawText = await generateRawText(prompt);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw llmCallFailed("refinement", error);
+      } else {
+        throw llmCallFailed("refinement", new Error("Unknown error"));
+      }
+    }
+
+    const parsedResult = parseLlmOutput(rawText);
+
+    if (!parsedResult.ok)
+      throw llmParseFailed("refinement", parsedResult.error);
+
+    const validationResult = validateParsedLlmOutput(parsedResult.value);
+
+    if (!validationResult.ok)
+      throw llmValidationFailed("refinement", validationResult.error);
+
+    const nodes = mapNodes(parsedResult.value.notes);
+    const links = extractLinksFromNodes(nodes);
 
     return {
       nodes,
@@ -47,143 +73,3 @@ export const RefinementModule: PipelineModules["RefinementModule"] = {
     };
   },
 };
-
-function buildStubResponse(input: RefineInput): string {
-  const seedText = input.draft.retrievalSeed.trim();
-  const draftText = input.draft.content.trim();
-  const primaryTitle = input.context.primary?.title?.trim();
-
-  if (input.draft.retrievalQueries.length > 0) {
-    const firstTitle = buildTitle(seedText, "Idea A");
-    const secondTitle = buildTitle(input.draft.retrievalQueries[0], "Idea B");
-    const firstContent = buildContent(seedText, draftText, primaryTitle);
-    const secondContent = buildContent(
-      input.draft.retrievalQueries[0],
-      draftText,
-      primaryTitle,
-    );
-
-    return [
-      `# ${firstTitle}`,
-      "",
-      firstContent,
-      "",
-      NOTE_SEPARATOR,
-      "",
-      `# ${secondTitle}`,
-      "",
-      `${secondContent}\n\nThis idea extends [[${firstTitle}]].`,
-    ].join("\n");
-  }
-
-  return [
-    `# ${buildTitle(seedText, "Refined Idea")}`,
-    "",
-    buildContent(seedText, draftText, primaryTitle),
-  ].join("\n");
-}
-
-function parseBlocks(rawText: string): ParsedBlock[] {
-  const segments = rawText
-    .split(NOTE_SEPARATOR)
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0);
-
-  if (segments.length === 0) {
-    throw new Error(
-      "RefinementModule: stub output did not contain note blocks.",
-    );
-  }
-
-  return segments.map(parseBlock);
-}
-
-function parseBlock(blockText: string): ParsedBlock {
-  const normalizedBlock = blockText.replace(/\r\n/g, "\n");
-  const lines = normalizedBlock.split("\n");
-  const titleLine = lines.find((line) => line.trim().startsWith("# "));
-
-  if (!titleLine) {
-    throw new Error(
-      "RefinementModule: note block is missing a markdown title.",
-    );
-  }
-
-  const title = titleLine.trim().slice(2).trim();
-
-  if (title.length === 0) {
-    throw new Error("RefinementModule: note title cannot be empty.");
-  }
-
-  const titleIndex = normalizedBlock.indexOf(titleLine);
-  const contentStart = titleIndex + titleLine.length;
-  const content = normalizedBlock.slice(contentStart).replace(/^\n+/, "");
-
-  if (content.trim().length === 0) {
-    throw new Error("RefinementModule: note block is missing content.");
-  }
-
-  return {
-    title,
-    content,
-    links: extractWikiLinks(content),
-  };
-}
-
-function extractLinks(blocks: ParsedBlock[], nodes: Node[]): Link[] {
-  return blocks.flatMap((block, index) =>
-    block.links.map((link) => ({
-      source: nodes[index].title, // TODO:  Refine to support title-based linking.
-      target: link.targetTitle,
-      type: link.type,
-    })),
-  );
-}
-
-function extractWikiLinks(content: string): ParsedBlock["links"] {
-  const matches = content.matchAll(/\[\[([^\]]+)\]\]/g);
-
-  return Array.from(matches, (match) => {
-    const targetTitle = match[1].trim();
-
-    if (targetTitle.length === 0) {
-      throw new Error("RefinementModule: wikilink target cannot be empty.");
-    }
-
-    return {
-      type: "extends" as const, // TODO: temporary
-      targetTitle,
-    };
-  });
-}
-
-function buildNodeId(index: number): string {
-  return `refined-node-${index + 1}`;
-}
-
-function buildTitle(source: string, fallback: string): string {
-  const cleaned = source.replace(/\s+/g, " ").trim();
-  return cleaned.length > 0 ? cleaned : fallback;
-}
-
-function buildContent(
-  seedText: string,
-  draftText: string,
-  primaryTitle: string | undefined,
-): string {
-  const parts = [draftText, seedText]
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-
-  if (primaryTitle) {
-    parts.push(`Context anchor: ${primaryTitle}.`);
-  }
-
-  const content = parts.join(" ").trim();
-
-  if (content.length === 0) {
-    throw new Error("RefinementModule: stub could not build note content.");
-  }
-
-  return content;
-}

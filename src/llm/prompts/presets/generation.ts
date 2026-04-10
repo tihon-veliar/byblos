@@ -57,6 +57,13 @@ export const GENERATION_META_SPEC = `
   - be relevant for the next search stage
   - use plain text only
   - not include markdown
+
+- Include retrieval_seed using string format
+  - retrieval_seed:
+  - optional
+  - single string
+  - represents the central idea of the draft
+  - used as a semantic anchor for retrieval
 `.trim();
 
 export const GENERATION_PROMPT_PRESET = {

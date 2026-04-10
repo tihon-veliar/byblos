@@ -5,6 +5,7 @@ import { ROLE } from "./blocks/role";
 import { OUTPUT_FORMAT } from "./blocks/output-format";
 import { META_FORMAT } from "./blocks/meta-format";
 import { NOTE_RULES } from "./blocks/note-rules";
+import { serializeGenerationContext } from "./serialize-context";
 
 export function buildPrompt(input: BuildPromptInput): string {
   return composePrompt([
@@ -34,7 +35,7 @@ export function buildPrompt(input: BuildPromptInput): string {
     },
     {
       title: "CONTEXT",
-      content: input.context,
+      content: serializeGenerationContext(input.context),
     },
     {
       title: "INPUT",

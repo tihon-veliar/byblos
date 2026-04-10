@@ -30,7 +30,7 @@ export type PipelineModules = {
     generate(input: {
       text: string;
       context: GenerationContext;
-    }): GenerationDraft;
+    }): Promise<GenerationDraft>;
   };
 
   RefinementModule: {
@@ -38,11 +38,10 @@ export type PipelineModules = {
       draft: GenerationDraft;
       context: GenerationContext;
       matches: Match[];
-      // proposedLinks: Link[];
-    }): {
+    }): Promise<{
       nodes: Node[];
       links: Link[];
-    };
+    }>;
   };
 
   LinkProposalModule: LinkProposalModule;

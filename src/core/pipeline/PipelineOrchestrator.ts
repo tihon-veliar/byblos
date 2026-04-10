@@ -7,7 +7,7 @@ export class PipelineOrchestrator {
     private readonly logger: Pick<Console, "log"> = console,
   ) {}
 
-  run(input: Input): PipelineResult {
+  async run(input: Input): Promise<PipelineResult> {
     const normalizedText = this.modules.Normalizer.normalize(input.text);
     this.log("Normalize", `text=${normalizedText}`);
 
@@ -17,7 +17,7 @@ export class PipelineOrchestrator {
     const context1 = this.modules.ContextBuilder.build(initialMatches);
     this.log("Context-1", `matches=${initialMatches.length}`);
 
-    const draft = this.modules.GenerationModule.generate({
+    const draft = await this.modules.GenerationModule.generate({
       text: normalizedText,
       context: context1,
     });
@@ -38,7 +38,7 @@ export class PipelineOrchestrator {
       `matches=${initialMatches.length + generatedMatches.length}`,
     );
 
-    const refined = this.modules.RefinementModule.refine({
+    const refined = await this.modules.RefinementModule.refine({
       draft,
       context: context2,
       matches: [...generatedMatches, ...initialMatches],

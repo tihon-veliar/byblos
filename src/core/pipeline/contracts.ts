@@ -17,14 +17,15 @@ interface Match {
   type: MatchType;
 }
 
-export type ContectItem = {
+export type СontextItem = {
   id: string;
   title: string;
+  content: string;
 };
 
 export type GenerationContext = {
-  primary?: ContectItem;
-  related: ContectItem[];
+  primary?: СontextItem;
+  related: СontextItem[];
 };
 interface MatchGroups {
   initial: Match[];
@@ -33,8 +34,8 @@ interface MatchGroups {
 
 export type LinkType = "extends" | "refines" | "contradicts";
 interface Link {
-  source: string; 
-  target: string; 
+  source: string;
+  target: string;
   type: LinkType;
 }
 
@@ -53,7 +54,6 @@ type GenerationDraft = {
   retrievalSeed: string;
 };
 
-
 export {
   Input,
   Node,
@@ -63,5 +63,4 @@ export {
   MatchGroups,
   PipelineResultStatus,
   GenerationDraft,
-
 };
