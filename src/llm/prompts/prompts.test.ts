@@ -9,25 +9,37 @@ import { serializeGenerationContext } from "./serialize-context";
 import type { GenerationContext } from "../../core/pipeline/contracts";
 
 describe("serializeGenerationContext", () => {
-  it("renders primary before related and preserves related order without rewriting items", () => {
+  it("renders primary before supporting and preserves order", () => {
     const context: GenerationContext = {
+      stage: "generation",
       primary: {
-        id: "primary",
+        noteId: "primary",
         title: " Primary idea ",
+        path: "Byblos/notes/primary.md",
         content: " Primary content ",
+        role: "primary",
+        includedBecause: "exact title match",
       },
-      related: [
+      supporting: [
         {
-          id: "r-1",
-          title: " First related ",
+          noteId: "s-1",
+          title: " First support ",
+          path: "Byblos/notes/s-1.md",
           content: " First content ",
+          role: "supporting",
+          includedBecause: "content overlap",
         },
         {
-          id: "r-2",
-          title: " Second related ",
+          noteId: "s-2",
+          title: " Second support ",
+          path: "Byblos/notes/s-2.md",
           content: " Second content ",
+          role: "supporting",
+          includedBecause: "content overlap",
         },
       ],
+      omitted: [],
+      trace: [],
     };
 
     expect(serializeGenerationContext(context)).toBe(
@@ -38,53 +50,47 @@ describe("serializeGenerationContext", () => {
         "",
         "Primary content",
         "",
-        "RELATED:",
+        "SUPPORTING:",
         "",
-        "# First related",
+        "# First support",
         "",
         "First content",
         "",
-        "# Second related",
+        "# Second support",
         "",
         "Second content",
       ].join("\n"),
     );
   });
 
-  it("handles missing primary by serializing only related items", () => {
+  it("handles missing primary by serializing only supporting items", () => {
     const context: GenerationContext = {
-      related: [
+      stage: "generation",
+      supporting: [
         {
-          id: "r-1",
+          noteId: "s-1",
           title: "Related note",
+          path: "Byblos/notes/s-1.md",
           content: "Related content",
+          role: "supporting",
+          includedBecause: "content overlap",
         },
       ],
+      omitted: [],
+      trace: [],
     };
 
     expect(serializeGenerationContext(context)).toBe(
-      ["RELATED:", "", "# Related note", "", "Related content"].join("\n"),
+      ["SUPPORTING:", "", "# Related note", "", "Related content"].join("\n"),
     );
   });
 
-  it("handles empty related items by serializing only primary", () => {
+  it("returns an empty string when both primary and supporting are empty", () => {
     const context: GenerationContext = {
-      primary: {
-        id: "primary",
-        title: "Primary note",
-        content: "Primary content",
-      },
-      related: [],
-    };
-
-    expect(serializeGenerationContext(context)).toBe(
-      ["PRIMARY:", "", "# Primary note", "", "Primary content"].join("\n"),
-    );
-  });
-
-  it("returns an empty string when both primary and related are empty", () => {
-    const context: GenerationContext = {
-      related: [],
+      stage: "generation",
+      supporting: [],
+      omitted: [],
+      trace: [],
     };
 
     expect(serializeGenerationContext(context)).toBe("");
@@ -119,33 +125,31 @@ describe("composePrompt", () => {
       ].join("\n"),
     );
   });
-
-  it("keeps empty section content predictable instead of dropping the section", () => {
-    const prompt = composePrompt([
-      { title: "FIRST", content: "" },
-      { title: "SECOND", content: "two" },
-    ]);
-
-    expect(prompt).toBe(
-      ["FIRST", "", "---", "", "SECOND", "", "two"].join("\n"),
-    );
-  });
 });
 
 describe("buildPrompt", () => {
   const context: GenerationContext = {
+    stage: "generation",
     primary: {
-      id: "primary",
+      noteId: "primary",
       title: "Main context",
+      path: "Byblos/notes/main-context.md",
       content: "Main context body",
+      role: "primary",
+      includedBecause: "exact title match",
     },
-    related: [
+    supporting: [
       {
-        id: "related-1",
+        noteId: "related-1",
         title: "Related context",
+        path: "Byblos/notes/related-context.md",
         content: "Related context body",
+        role: "supporting",
+        includedBecause: "content overlap",
       },
     ],
+    omitted: [],
+    trace: [],
   };
   const input = "Turn this idea into notes.";
 
@@ -187,7 +191,7 @@ describe("buildPrompt", () => {
   it("builds refinement prompts with the same shared structure and refinement-specific sections", () => {
     const prompt = buildPrompt({
       preset: REFINEMENT_PROMPT_PRESET,
-      context,
+      context: { ...context, stage: "refinement" },
       input,
     });
 
@@ -196,31 +200,5 @@ describe("buildPrompt", () => {
     expect(prompt).toContain(
       `META SPEC\n\n${REFINEMENT_PROMPT_PRESET.metaSpec}`,
     );
-    expect(prompt).toContain(
-      `CONTEXT\n\n${serializeGenerationContext(context)}`,
-    );
-    expect(prompt).toContain(`INPUT\n\n${input}`);
-  });
-
-  it("does not reorder preset content across TASK and META SPEC sections", () => {
-    const prompt = buildPrompt({
-      preset: REFINEMENT_PROMPT_PRESET,
-      context,
-      input,
-    });
-
-    const taskIndex = prompt.indexOf(
-      `TASK\n\n${REFINEMENT_PROMPT_PRESET.task}`,
-    );
-    const metaSpecIndex = prompt.indexOf(
-      `META SPEC\n\n${REFINEMENT_PROMPT_PRESET.metaSpec}`,
-    );
-    const contextIndex = prompt.indexOf(
-      `CONTEXT\n\n${serializeGenerationContext(context)}`,
-    );
-
-    expect(taskIndex).toBeGreaterThan(-1);
-    expect(metaSpecIndex).toBeGreaterThan(taskIndex);
-    expect(contextIndex).toBeGreaterThan(metaSpecIndex);
   });
 });

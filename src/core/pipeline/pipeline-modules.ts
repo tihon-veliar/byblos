@@ -1,16 +1,19 @@
 import type {
   Link,
   MatchGroups,
-  Match,
+  NeighborLookup,
+  NoteMatch,
   Node,
   PipelineResult,
   GenerationContext,
-  Input,
   GenerationDraft,
+  RetrievalResult,
+  SearchQuery,
 } from "./contracts";
+import type { IndexedNote } from "../../indexing/types";
 
 export type LinkProposalModule = {
-  propose(input: { nodes: Node[]; matches: Match[] }): Link[];
+  propose(input: { nodes: Node[]; matches: NoteMatch[] }): Link[];
 };
 
 export type PipelineModules = {
@@ -19,11 +22,21 @@ export type PipelineModules = {
   };
 
   SearchModule: {
-    search(query: string): Match[];
+    search(query: SearchQuery): RetrievalResult;
+    getNoteById(noteId: string): IndexedNote | undefined;
+    getNeighborLookup(noteId: string): NeighborLookup | undefined;
+    getSnapshot(): {
+      notes: IndexedNote[];
+    };
   };
 
   ContextBuilder: {
-    build(matches: Match[]): GenerationContext;
+    build(input: {
+      stage: "generation" | "refinement";
+      retrieval: RetrievalResult;
+      resolveNote: (noteId: string) => IndexedNote | undefined;
+      getNeighborLookup: (noteId: string) => NeighborLookup | undefined;
+    }): GenerationContext;
   };
 
   GenerationModule: {
@@ -37,10 +50,11 @@ export type PipelineModules = {
     refine(input: {
       draft: GenerationDraft;
       context: GenerationContext;
-      matches: Match[];
+      matches: NoteMatch[];
     }): Promise<{
       nodes: Node[];
       links: Link[];
+      rawText: string;
     }>;
   };
 

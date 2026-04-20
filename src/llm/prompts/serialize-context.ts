@@ -4,15 +4,16 @@ import type { GenerationContext } from "../../core/pipeline/contracts";
 
 export function serializeGenerationContext(context: GenerationContext): string {
   const parts: string[] = [];
+  const supporting = context.supporting ?? [];
   if (context.primary) {
     parts.push("PRIMARY:");
     parts.push(formatItem(context.primary));
   }
 
-  if (context.related.length > 0) {
-    parts.push("RELATED:");
+  if (supporting.length > 0) {
+    parts.push("SUPPORTING:");
 
-    for (const item of context.related) {
+    for (const item of supporting) {
       parts.push(formatItem(item));
     }
   }

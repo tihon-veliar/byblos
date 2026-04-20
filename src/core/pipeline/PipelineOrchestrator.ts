@@ -1,4 +1,10 @@
-import type { Input, PipelineResult } from "./contracts";
+import type {
+  Input,
+  NoteMatch,
+  RetrievalResult,
+  SearchQuery,
+  PipelineResult,
+} from "./contracts";
 import type { PipelineModules } from "./pipeline-modules";
 
 export class PipelineOrchestrator {
@@ -11,11 +17,28 @@ export class PipelineOrchestrator {
     const normalizedText = this.modules.Normalizer.normalize(input.text);
     this.log("Normalize", `text=${normalizedText}`);
 
-    const initialMatches = this.modules.SearchModule.search(normalizedText);
-    this.log("Search-1", `matches=${initialMatches.length}`);
+    const initialQuery: SearchQuery = {
+      text: normalizedText,
+      stage: "search-1",
+      limit: 5,
+    };
+    const initialMatches = this.modules.SearchModule.search(initialQuery);
+    this.log(
+      "Search-1",
+      `strong=${initialMatches.strong.length} related=${initialMatches.related.length}`,
+    );
 
-    const context1 = this.modules.ContextBuilder.build(initialMatches);
-    this.log("Context-1", `matches=${initialMatches.length}`);
+    const context1 = this.modules.ContextBuilder.build({
+      stage: "generation",
+      retrieval: initialMatches,
+      resolveNote: (noteId) => this.modules.SearchModule.getNoteById(noteId),
+      getNeighborLookup: (noteId) =>
+        this.modules.SearchModule.getNeighborLookup(noteId),
+    });
+    this.log(
+      "Context-1",
+      `primary=${context1.primary?.title ?? "none"} supporting=${context1.supporting.length}`,
+    );
 
     const draft = await this.modules.GenerationModule.generate({
       text: normalizedText,
@@ -23,36 +46,39 @@ export class PipelineOrchestrator {
     });
     this.log("Generate-Draft", `draft.content=${draft.content}`);
 
-    const generatedQuery = [draft.retrievalSeed, ...draft.retrievalQueries]
-      .join(" ")
-      .trim(); // TODO: Keep search-2 query simple for Sprint 1 MVP.
+    const generatedQuery: SearchQuery = {
+      text: [draft.retrievalSeed, ...draft.retrievalQueries].join(" ").trim(),
+      stage: "search-2",
+      limit: 6,
+    };
     const generatedMatches = this.modules.SearchModule.search(generatedQuery);
-    this.log("Search-2", `matches=${generatedMatches.length}`);
+    this.log(
+      "Search-2",
+      `strong=${generatedMatches.strong.length} related=${generatedMatches.related.length}`,
+    );
 
-    const context2 = this.modules.ContextBuilder.build([
-      ...initialMatches,
-      ...generatedMatches,
-    ]);
+    const mergedMatches = mergeRetrievalResults(initialMatches, generatedMatches);
+    const context2 = this.modules.ContextBuilder.build({
+      stage: "refinement",
+      retrieval: mergedMatches,
+      resolveNote: (noteId) => this.modules.SearchModule.getNoteById(noteId),
+      getNeighborLookup: (noteId) =>
+        this.modules.SearchModule.getNeighborLookup(noteId),
+    });
     this.log(
       "Context-2",
-      `matches=${initialMatches.length + generatedMatches.length}`,
+      `primary=${context2.primary?.title ?? "none"} supporting=${context2.supporting.length}`,
     );
 
     const refined = await this.modules.RefinementModule.refine({
       draft,
       context: context2,
-      matches: [...generatedMatches, ...initialMatches],
+      matches: [...mergedMatches.strong, ...mergedMatches.related],
     });
     this.log(
       "Refine",
       `nodes=${refined.nodes.length} links=${refined.links.length}`,
     );
-
-    const proposedLinks = this.modules.LinkProposalModule.propose({
-      nodes: refined.nodes,
-      matches: generatedMatches,
-    });
-    this.log("Link", `links=${proposedLinks.length}`);
 
     const result = this.modules.ResultAssembler.assemble({
       nodes: refined.nodes,
@@ -60,7 +86,7 @@ export class PipelineOrchestrator {
         initial: initialMatches,
         generated: generatedMatches,
       },
-      links: [...refined.links, ...proposedLinks],
+      links: refined.links,
     });
 
     this.log(
@@ -74,4 +100,39 @@ export class PipelineOrchestrator {
   private log(stepName: string, summary: string): void {
     this.logger.log(`[${stepName}] ${summary}`);
   }
+}
+
+function mergeRetrievalResults(
+  left: RetrievalResult,
+  right: RetrievalResult,
+): RetrievalResult {
+  return {
+    query: right.query,
+    strong: dedupeMatches([...left.strong, ...right.strong]),
+    related: dedupeMatches([...left.related, ...right.related]).filter(
+      (match) =>
+        ![...left.strong, ...right.strong].some(
+          (strongMatch) => strongMatch.noteId === match.noteId,
+        ),
+    ),
+  };
+}
+
+function dedupeMatches(matches: NoteMatch[]): NoteMatch[] {
+  const byId = new Map<string, NoteMatch>();
+
+  for (const match of matches) {
+    const current = byId.get(match.noteId);
+
+    if (!current || current.score < match.score) {
+      byId.set(match.noteId, match);
+    }
+  }
+
+  return Array.from(byId.values()).sort(
+    (left, right) =>
+      right.score - left.score ||
+      left.title.localeCompare(right.title) ||
+      left.noteId.localeCompare(right.noteId),
+  );
 }

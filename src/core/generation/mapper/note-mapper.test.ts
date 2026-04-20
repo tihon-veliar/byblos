@@ -73,11 +73,15 @@ Responsibility depends on agency.`,
         id: "refined-node-1",
         title: "Human Agency",
         content: "Agency is the capacity to act for reasons.",
+        rawMarkdown: "# Human Agency\n\nAgency is the capacity to act for reasons.",
+        wikiLinks: [],
       },
       {
         id: "refined-node-2",
         title: "Responsibility",
         content: "Responsibility depends on agency.",
+        rawMarkdown: "# Responsibility\n\nResponsibility depends on agency.",
+        wikiLinks: [],
       },
     ]);
   });
@@ -88,11 +92,15 @@ Responsibility depends on agency.`,
         id: "refined-node-1",
         title: "Human Agency",
         content: "Connects to [[Responsibility]] and [[Reason]].",
+        rawMarkdown: "",
+        wikiLinks: ["Responsibility", "Reason"],
       },
       {
         id: "refined-node-2",
         title: "Responsibility",
         content: "Depends on [[Human Agency]].",
+        rawMarkdown: "",
+        wikiLinks: ["Human Agency"],
       },
     ];
 

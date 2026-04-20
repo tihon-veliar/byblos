@@ -1,63 +1,42 @@
-import type { Match } from "../../core/pipeline/contracts";
-import type { PipelineModules } from "../../core/pipeline/pipeline-modules";
+import type {
+  NeighborLookup,
+  RetrievalResult,
+  SearchQuery,
+} from "../../core/pipeline/contracts";
+import type { IndexedNote, NoteIndexSnapshot } from "../types";
+import { rankLexicalMatches } from "./lexical-ranker";
 
-type MockIndexEntry = {
-  id: string;
-  title: string;
-  keywords: string[];
-};
+export function createSearchModule(snapshot: NoteIndexSnapshot) {
+  const notesById = new Map<string, IndexedNote>(
+    snapshot.notes.map((note) => [note.id, note]),
+  );
 
-const MOCK_INDEX: MockIndexEntry[] = [
-  {
-    id: "note-human-agency",
-    title: "Human Agency",
-    keywords: ["human", "agency", "choice"],
-  },
-  {
-    id: "note-meaning-making",
-    title: "Meaning Making",
-    keywords: ["meaning", "sense", "interpretation"],
-  },
-  {
-    id: "note-symbolic-order",
-    title: "Symbolic Order",
-    keywords: ["meaning", "symbol", "language"],
-  },
-];
-
-function containsKeyword(query: string, keywords: string[]): boolean {
-  return keywords.some((keyword) => query.includes(keyword));
-}
-
-function toMatch(
-  entry: MockIndexEntry,
-  score: number,
-  type: Match["type"],
-): Match {
   return {
-    id: entry.id,
-    title: entry.title,
-    score,
-    type,
+    search(query: SearchQuery): RetrievalResult {
+      return rankLexicalMatches(query, snapshot);
+    },
+    getNoteById(noteId: string): IndexedNote | undefined {
+      return notesById.get(noteId);
+    },
+    getNeighborLookup(noteId: string): NeighborLookup | undefined {
+      const note = notesById.get(noteId);
+
+      if (!note) {
+        return undefined;
+      }
+
+      return {
+        noteId,
+        outgoing: snapshot.graph.outgoingById[noteId] ?? [],
+        incoming: snapshot.graph.incomingById[noteId] ?? [],
+      };
+    },
+    getSnapshot(): { notes: IndexedNote[] } {
+      return {
+        notes: snapshot.notes,
+      };
+    },
   };
 }
 
-export const SearchModule: PipelineModules["SearchModule"] = {
-  search(query: string): Match[] {
-    const normalizedQuery = query.toLowerCase();
-
-    if (containsKeyword(normalizedQuery, ["human"])) {
-      const entry = MOCK_INDEX.find((item) => item.id === "note-human-agency");
-
-      return entry ? [toMatch(entry, 0.95, "strong")] : [];
-    }
-
-    if (containsKeyword(normalizedQuery, ["meaning"])) {
-      return MOCK_INDEX.filter((entry) => entry.id !== "note-human-agency")
-        .slice(0, 2)
-        .map((entry, index) => toMatch(entry, 0.74 - index * 0.09, "related"));
-    }
-
-    return [];
-  },
-};
+export type SearchModule = ReturnType<typeof createSearchModule>;
