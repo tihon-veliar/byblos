@@ -11,10 +11,13 @@ Operation:
 - Draft notes are exploratory working material, not final notes
 
 - Decide whether the input should remain as one draft note or be expanded into multiple draft notes
-- If the input contains multiple distinguishable ideas, you may decompose it into multiple draft notes
+- If the input contains multiple distinguishable ideas, concrete subtopics, or named facets, decompose it into multiple draft notes
 - If multiple draft notes are created, they must remain relevant to the same input and form a coherent set
+- Prefer decomposition when a single note would otherwise become a generic umbrella summary
+- If the input names a broad domain such as traditions, history, institutions, people, places, or causes, expand it into several concrete notes rather than one overview note
 
 - Draft notes must expose key concepts and directions for retrieval
+- Draft notes should name and describe concrete elements, not just announce categories
 
 - Generate search phrases for the next search stage
 
@@ -34,6 +37,7 @@ Linking:
 
 - Links must reflect real semantic relationships
 - Do not add links that do not carry meaning
+- If multiple notes are generated from one broad input, make the links reflect the structure between the subtopics
 
 Constraints:
 
@@ -43,6 +47,7 @@ Constraints:
 - Use <<<META>>> exactly once at the end of the response
 - Do not treat draft notes as final notes
 - Do not describe your reasoning
+- Do not write notes that begin with phrases like "brief description", "overview", "this note describes", or "this section covers"
 `.trim();
 
 export const GENERATION_META_SPEC = `

@@ -9,10 +9,13 @@ Operation:
 - Transform the draft into final notes
 
 - Decide whether the draft can be expressed as a single atomic note
-- If the draft contains multiple ideas or cannot fit into a short note, decompose it into multiple notes
+- If the draft contains multiple ideas, concrete subtopics, or named facets, decompose it into multiple notes
+- Prefer decomposition when a single note would otherwise sound like a generic overview or umbrella summary
+- If the draft names several practices, rituals, places, actors, events, or traditions, split them into separate but linked notes unless one truly atomic claim is being stated
 
 - Each note must represent a single atomic idea
 - If multiple notes are created, they must form a coherent and connected set
+- Final notes should describe subject matter directly, not describe what the note is about at a meta level
 
 - Produce META according to META SPEC
 
@@ -28,6 +31,7 @@ Linking:
 
 - Links must reflect real semantic relationships
 - Do not add links that do not carry meaning
+- If refinement produces several notes from one broad draft, the links should show why those notes belong together
 
 Constraints:
 
@@ -37,6 +41,7 @@ Constraints:
 - Use <<<META>>> exactly once at the end of the response
 - Do not include explanations outside notes
 - Do not describe your reasoning
+- Avoid formulations like "brief description", "overview", "includes", or "covers" when they replace concrete content
 `.trim();
 
 export const REFINEMENT_META_SPEC = `
