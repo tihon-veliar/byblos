@@ -95,3 +95,6 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+.sandbox-vault
+.sandbox-vault-llm

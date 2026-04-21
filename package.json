@@ -7,7 +7,9 @@
     "test": "vitest run src --pool threads",
     "test:watch": "vitest src --pool threads",
     "test:ui": "vitest --ui",
-    "sandbox": "npx tsx  --env-file=./.env src/sandbox/local-run.ts "
+    "sandbox": "npx tsx --env-file=./.env src/sandbox/local-run.ts",
+    "sandbox:mvp": "npx tsx src/sandbox/mvp-sandbox.ts",
+    "sandbox:llm": "npx tsx --env-file=./.env src/sandbox/llm-sandbox.ts"
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
