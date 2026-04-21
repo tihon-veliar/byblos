@@ -21,6 +21,7 @@ import { GenerationModule } from "../llm/generation/GenerationModule";
 import { RefinementModule } from "../llm/refinement/RefinementModule";
 import { getLlmConfigFromEnv } from "../llm/infra/config";
 import type { IndexedNote } from "../indexing/types";
+import { sanitizeNoteFileStem } from "../indexing/normalize";
 
 const SANDBOX_ROOT = path.resolve(".sandbox-vault-llm");
 const NOTES_ROOT = path.join(SANDBOX_ROOT, "Byblos", "notes");
@@ -59,7 +60,10 @@ async function main(): Promise<void> {
     existingNotes: beforeSnapshot.notes,
     buildPathForTitle: (title) =>
       path
-        .relative(SANDBOX_ROOT, path.join(NOTES_ROOT, `${slugify(title)}.md`))
+        .relative(
+          SANDBOX_ROOT,
+          path.join(NOTES_ROOT, `${sanitizeNoteFileStem(title)}.md`),
+        )
         .replace(/\\/g, "/"),
     noteExists: async (relativePath) =>
       exists(path.join(SANDBOX_ROOT, relativePath)),
@@ -86,7 +90,8 @@ async function main(): Promise<void> {
     links: pipelineResult.links,
     matches: pipelineResult.matches,
   });
-  printJson("Committed", committed);
+  printJson("Committed", committed.committed);
+  printJson("Unresolved Wiki Links", committed.unresolvedWikiLinks);
   printJson(
     "Indexed Notes After Commit",
     afterSnapshot.notes.map((note) => summarizeNote(note)),
@@ -167,8 +172,8 @@ committedAt: 2026-04-19T10:05:00.000Z
 
 Старейшина города [[Хацберг]]. светловолосый мужчина с весьма паршивым характером`;
 
-  await writeSeedNote("responsibility.md", responsibility, input.overwrite);
-  await writeSeedNote("reason.md", reason, input.overwrite);
+  await writeSeedNote("Хацберг.md", responsibility, input.overwrite);
+  await writeSeedNote("Харконин.md", reason, input.overwrite);
 }
 
 async function rebuildIndexes() {
@@ -253,14 +258,6 @@ function summarizeNote(note: IndexedNote): object {
     outgoingWikiLinks: note.outgoingWikiLinks,
     outgoingTypedLinks: note.outgoingTypedLinks,
   };
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .replace(/\s+/g, "-");
 }
 
 function printSection(title: string, value: string): void {

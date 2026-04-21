@@ -1,5 +1,5 @@
 import { normalizePath, type App } from "obsidian";
-import { normalizeTitle, slugifyTitle } from "../../indexing/normalize";
+import { normalizeTitle, sanitizeNoteFileStem } from "../../indexing/normalize";
 
 export const BYBLOS_ROOT = "Byblos";
 export const BYBLOS_NOTES_ROOT = `${BYBLOS_ROOT}/notes`;
@@ -40,7 +40,14 @@ export class ObsidianNoteStore {
         return false;
       }
 
-      return normalizeTitle(file.basename) === normalizedTarget;
+      if (normalizeTitle(file.basename) === normalizedTarget) {
+        return true;
+      }
+
+      const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      const aliases = readAliases(frontmatter?.aliases);
+
+      return aliases.some((alias) => normalizeTitle(alias) === normalizedTarget);
     });
   }
 
@@ -49,7 +56,9 @@ export class ObsidianNoteStore {
   }
 
   buildManagedNotePath(title: string): string {
-    return normalizePath(`${BYBLOS_NOTES_ROOT}/${slugifyTitle(title)}.md`);
+    return normalizePath(
+      `${BYBLOS_NOTES_ROOT}/${sanitizeNoteFileStem(title)}.md`,
+    );
   }
 
   async writeCanonicalNote(path: string, content: string): Promise<void> {
@@ -70,4 +79,17 @@ export class ObsidianNoteStore {
       await this.app.vault.createFolder(normalized);
     }
   }
+}
+
+function readAliases(value: unknown): string[] {
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
 }

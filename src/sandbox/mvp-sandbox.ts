@@ -8,6 +8,7 @@ import { commitNotes } from "../core/commit/commit-notes";
 import type { IndexedNote, LinkGraphIndex } from "../indexing/types";
 import type { Node } from "../core/pipeline/contracts";
 import { normalize } from "../core/pipeline/Normalizer";
+import { sanitizeNoteFileStem } from "../indexing/normalize";
 
 const SANDBOX_ROOT = path.resolve(".sandbox-vault");
 const NOTES_ROOT = path.join(SANDBOX_ROOT, "Byblos", "notes");
@@ -45,7 +46,13 @@ async function main(): Promise<void> {
   const committed = await commitNotes({
     nodes,
     existingNotes: beforeSnapshot.notes,
-    buildPathForTitle: (title) => path.relative(SANDBOX_ROOT, path.join(NOTES_ROOT, `${slugify(title)}.md`)).replace(/\\/g, "/"),
+    buildPathForTitle: (title) =>
+      path
+        .relative(
+          SANDBOX_ROOT,
+          path.join(NOTES_ROOT, `${sanitizeNoteFileStem(title)}.md`),
+        )
+        .replace(/\\/g, "/"),
     noteExists: async (relativePath) => exists(path.join(SANDBOX_ROOT, relativePath)),
     writeCanonicalNote: async (relativePath, content) => {
       const absolutePath = path.join(SANDBOX_ROOT, relativePath);
@@ -63,7 +70,8 @@ async function main(): Promise<void> {
   printSection("Input", input);
   printJson("Search-1", search1);
   printJson("Context", context);
-  printJson("Committed", committed);
+  printJson("Committed", committed.committed);
+  printJson("Unresolved Wiki Links", committed.unresolvedWikiLinks);
   printJson("Indexed Notes After Commit", afterSnapshot.notes.map(summarizeNote));
   printJson("Graph Index", graph);
 }
@@ -211,14 +219,6 @@ function summarizeNote(note: IndexedNote): object {
     outgoingWikiLinks: note.outgoingWikiLinks,
     outgoingTypedLinks: note.outgoingTypedLinks,
   };
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .replace(/\s+/g, "-");
 }
 
 function deriveTitleFromInput(input: string): string {

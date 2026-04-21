@@ -7,10 +7,17 @@ export type ResolvedTypedLink = {
   targetId: string;
 };
 
+export type UnresolvedWikiLink = {
+  sourceTitle: string;
+  targetTitle: string;
+};
+
 export type CommitCandidate = {
   node: Node;
   id: string;
   path: string;
+  originalTitle: string;
+  autoOriginLink?: ResolvedTypedLink;
 };
 
 export async function resolveCommitLinks(input: {
@@ -18,14 +25,19 @@ export async function resolveCommitLinks(input: {
   existingNotes: IndexedNote[];
   hasUnmanagedNoteWithTitle: (title: string) => Promise<boolean>;
   proposedLinks?: Link[];
-}): Promise<Map<string, ResolvedTypedLink[]>> {
+}): Promise<{
+  typedLinksBySourceId: Map<string, ResolvedTypedLink[]>;
+  unresolvedWikiLinks: UnresolvedWikiLink[];
+}> {
   const byGeneratedTitle = new Map<string, CommitCandidate>();
-  const byExistingTitle = new Map<string, IndexedNote[]>();
+  const byExistingTarget = new Map<string, IndexedNote[]>();
 
   for (const note of input.existingNotes) {
-    const key = normalizeTitle(note.title);
-    const current = byExistingTitle.get(key) ?? [];
-    byExistingTitle.set(key, [...current, note]);
+    addExistingTarget(byExistingTarget, note.title, note);
+
+    for (const alias of note.aliases) {
+      addExistingTarget(byExistingTarget, alias, note);
+    }
   }
 
   for (const candidate of input.candidates) {
@@ -35,7 +47,7 @@ export async function resolveCommitLinks(input: {
       throw new Error(`Duplicate generated title: ${candidate.node.title}`);
     }
 
-    if (byExistingTitle.has(normalized)) {
+    if (byExistingTarget.has(normalized)) {
       throw new Error(`Managed note already exists for title: ${candidate.node.title}`);
     }
 
@@ -47,9 +59,12 @@ export async function resolveCommitLinks(input: {
   }
 
   const resolvedBySourceId = new Map<string, ResolvedTypedLink[]>();
+  const unresolvedWikiLinks: UnresolvedWikiLink[] = [];
 
   for (const candidate of input.candidates) {
-    const resolved: ResolvedTypedLink[] = [];
+    const resolved: ResolvedTypedLink[] = candidate.autoOriginLink
+      ? [candidate.autoOriginLink]
+      : [];
 
     for (const targetTitle of Array.from(new Set(candidate.node.wikiLinks))) {
       const normalizedTarget = normalizeTitle(targetTitle);
@@ -60,7 +75,7 @@ export async function resolveCommitLinks(input: {
         continue;
       }
 
-      const existingTargets = byExistingTitle.get(normalizedTarget) ?? [];
+      const existingTargets = byExistingTarget.get(normalizedTarget) ?? [];
 
       if (existingTargets.length > 1) {
         throw new Error(`Ambiguous managed note link target: ${targetTitle}`);
@@ -75,23 +90,65 @@ export async function resolveCommitLinks(input: {
         continue;
       }
 
-      throw new Error(`Unresolved managed note link target: ${targetTitle}`);
+      unresolvedWikiLinks.push({
+        sourceTitle: candidate.node.title,
+        targetTitle,
+      });
     }
 
-    resolvedBySourceId.set(candidate.id, resolved);
+    resolvedBySourceId.set(candidate.id, dedupeTypedLinks(resolved));
   }
 
-  return resolvedBySourceId;
+  return {
+    typedLinksBySourceId: resolvedBySourceId,
+    unresolvedWikiLinks,
+  };
+}
+
+function addExistingTarget(
+  targets: Map<string, IndexedNote[]>,
+  value: string,
+  note: IndexedNote,
+): void {
+  const normalized = normalizeTitle(value);
+
+  if (!normalized) {
+    return;
+  }
+
+  const current = targets.get(normalized) ?? [];
+
+  if (current.some((existing) => existing.id === note.id)) {
+    return;
+  }
+
+  targets.set(normalized, [...current, note]);
+}
+
+function dedupeTypedLinks(links: ResolvedTypedLink[]): ResolvedTypedLink[] {
+  const seen = new Set<string>();
+
+  return links.filter((link) => {
+    const key = `${link.type}:${link.targetId}`;
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }
 
 function validateProposedLinks(candidates: CommitCandidate[], proposedLinks: Link[]): void {
   const wikiTargetsBySource = new Map<string, Set<string>>();
 
   for (const candidate of candidates) {
-    wikiTargetsBySource.set(
-      candidate.node.title,
-      new Set(candidate.node.wikiLinks.map((target) => normalizeTitle(target))),
+    const targets = new Set(
+      candidate.node.wikiLinks.map((target) => normalizeTitle(target)),
     );
+    wikiTargetsBySource.set(candidate.node.title, targets);
+    wikiTargetsBySource.set(candidate.originalTitle, targets);
   }
 
   for (const link of proposedLinks) {

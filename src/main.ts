@@ -76,7 +76,12 @@ export default class ByblosPlugin extends Plugin {
       });
 
       await this.rebuildIndexes();
-      new Notice(`Byblos: committed ${committed.length} note(s)`);
+      const unresolvedCount = committed.unresolvedWikiLinks.length;
+      new Notice(
+        unresolvedCount > 0
+          ? `Byblos: committed ${committed.committed.length} note(s), ${unresolvedCount} unresolved link(s)`
+          : `Byblos: committed ${committed.committed.length} note(s)`,
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown Byblos error";
