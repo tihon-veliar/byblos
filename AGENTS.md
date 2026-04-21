@@ -1,4 +1,4 @@
-# Byblos — Agent Rules
+# Byblos - Agent Rules
 
 ## Project
 Byblos is an Obsidian plugin for epistemic Zettelkasten note generation and linking.
@@ -41,7 +41,7 @@ Every note MUST include:
 - audit
 
 ## Workflow
-draft → review → committed
+draft -> review -> committed
 
 ## Agents must NEVER
 - create notes without required fields
@@ -52,4 +52,9 @@ draft → review → committed
 - refactor outside task scope
 
 ## Current Stage
-MVP — enforce structure, avoid feature expansion
+MVP - enforce structure, avoid feature expansion
+
+## Design Ideas
+- Store non-committed architecture and workflow ideas in `ideas/`
+- Current expansion-mode concept lives in `ideas/iterative-expansion-mode.md`
+- Treat documents in `ideas/` as optional proposals, not as default pipeline requirements
